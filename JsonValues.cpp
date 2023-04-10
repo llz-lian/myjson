@@ -2,8 +2,8 @@
 #include"Node.h"
 
 JsonValue::JsonValue() {};
-JsonValue::JsonValue(const Value &&val) :__value(std::move(val)) {}
-JsonValue::JsonValue(const Value &&val, bool array_type)
+JsonValue::JsonValue(Value &&val) :__value(std::move(val)) {}
+JsonValue::JsonValue(Value &&val, bool array_type)
 	:__value(std::move(val)), array_type(array_type) {}
 JsonValue::JsonValue(const JsonValue & v)
 	:__value(v.__value), array_type(v.array_type), type(v.type) {}
@@ -102,19 +102,19 @@ std::string JsonValue::toString()const
 
 bool JsonValue::eq(const JsonValue & v)const
 {
-	if (v.type == NO_TYPE || type == NO_TYPE)
+	if (v.type == JSONTYPE::NO_TYPE || type == JSONTYPE::NO_TYPE)
 		return false;
 	if (v.type != type)
 		return false;
-	if (type == NULL_TYPE)
+	if (type == JSONTYPE::NULL_TYPE)
 		return true;
-	if (type == BOOL_TYPE)
+	if (type == JSONTYPE::BOOL_TYPE)
 		return std::get<bool>(__value) == std::get<bool>(v.__value);
-	if(type == NUMBER_TYPE)
+	if(type == JSONTYPE::NUMBER_TYPE)
 		return std::get<double>(__value) == std::get<double>(v.__value);
-	if(type == STRING_TYPE)
+	if(type == JSONTYPE::STRING_TYPE)
 		return std::get<String>(__value) == std::get<String>(v.__value);
-	if (type == ARRAY_TYPE)
+	if (type == JSONTYPE::ARRAY_TYPE)
 	{
 		const JsonArray & this_array = std::get<JsonArray>(__value);
 		const JsonArray & v_array = std::get<JsonArray>(v.__value);

@@ -5,25 +5,88 @@
 #endif
 #include"Node.h"
 #include"Func.h"
-enum PARSE_STATE { PARSE_INVALID_VALUE, PARSE_OK, PARSE_NEED_VALUE, PARSE_NEED_SINGULAR,PARSE_INVALID_STRING ,PARSE_INVALID_ARRAY};
+enum class PARSE_STATE { PARSE_INVALID_VALUE, PARSE_OK, PARSE_NEED_VALUE, 
+						 PARSE_NEED_SINGULAR, PARSE_INVALID_STRING, PARSE_INVALID_ARRAY ,
+						 PARSE_NEED_KEY,PARSE_INVALID_OBJECT
+};
 class Parse
 {
 protected:
 	void __nopBlank(const std::string_view s, size_t & index)
 	{
-		while (index < s.size() && s[index] == ' ')
+		while (index < s.size() && (s[index] == ' '||s[index]=='\t'||s[index] == '\n'||s[index] == '\r'))
 			index++;
 	}
 	bool __checkStr(const std::string_view s, size_t & index, const std::string_view & target)
 	{
 		auto check = [&](char c) {return index < s.size() && s[index++] == c; };
-		for (int i = 0; i < target.size(); i++)
+		for (size_t i = 0; i < target.size(); i++)
 		{
 			if (!check(target[i]))
 				return false;
 		}
 		return true;
 	}
+
+	auto __getRawString(const std::string_view s, size_t& index)
+	{
+		if (s.size() < 2)
+			return std::pair{PARSE_STATE::PARSE_INVALID_STRING,String("")};
+		std::stringstream ss;
+		index++;
+		bool tail = false;
+		for (; !tail; index++)
+		{
+			if (index == s.size())
+				return std::pair{ PARSE_STATE::PARSE_INVALID_STRING ,String("") };
+			char c = s[index];
+			switch (c)
+			{
+			case '"':
+				tail = true;
+				break;
+			case '\\':
+				index++;
+				switch (s[index])
+				{
+				case '\\':
+					ss << '\\';
+					break;
+				case 'n':
+					ss << '\n';
+					break;
+				case 'b':
+					ss << '\b';
+					break;
+				case 't':
+					ss << '\t';
+					break;
+				case 'f':
+					ss << '\f';
+					break;
+				case 'r':
+					ss << '\r';
+					break;
+				case '/':
+					ss << '/';
+					break;
+				case '\"':
+					ss << '"';
+					break;
+				default:
+					return std::pair{ PARSE_STATE::PARSE_INVALID_STRING ,String("") };
+				}
+				break;
+			default:
+				if ((unsigned char)(c) < 0x20)
+					return std::pair{ PARSE_STATE::PARSE_INVALID_STRING ,String("") };
+				ss << c;
+				break;
+			}
+		}
+		return std::pair{ PARSE_STATE::PARSE_OK ,ss.str()};
+	}
+
 	PARSE_STATE __parseTrue(const std::string_view s, size_t & index, JsonValue & v)
 	{
 		// start with t
@@ -75,7 +138,7 @@ protected:
 		else
 		{
 			if(!(s[index]>='1'&&s[index]<='9'))
-				return PARSE_INVALID_VALUE;
+				return PARSE_STATE::PARSE_INVALID_VALUE;
 			for (; index < s.size(); index++)
 			{
 				if (!(isdigit(s[index])))
@@ -87,7 +150,7 @@ protected:
 		{
 			index++;
 			if (index >= s.size()||!(s[index] >= '0'&&s[index] <= '9'))
-				return PARSE_INVALID_VALUE;
+				return PARSE_STATE::PARSE_INVALID_VALUE;
 			for (; index < s.size(); index++)
 			{
 				if (!(isdigit(s[index])))
@@ -98,7 +161,7 @@ protected:
 		{
 			index++;
 			if (index < s.size()&&(s[index] == '+' || s[index] == '-')) index++;
-			if (index >= s.size()) return PARSE_INVALID_VALUE;
+			if (index >= s.size()) return PARSE_STATE::PARSE_INVALID_VALUE;
 			for (; index < s.size(); index++)
 			{
 				if (!(isdigit(s[index])))
@@ -112,68 +175,16 @@ protected:
 		ss >> num;
 		v.__value = num;
 		v.type = JSONTYPE::NUMBER_TYPE;
-		return PARSE_OK;
+		return PARSE_STATE::PARSE_OK;
 	}
 	PARSE_STATE __parseString(const std::string_view s, size_t & index, JsonValue & v)
 	{
 		// tail == '"'
 		// head == '"'
-		if (s.size() < 2)
-			return PARSE_INVALID_STRING;
-		std::string str;
-		std::stringstream ss;
-		index++;
-		bool tail = false;
-		for (;!tail; index++)
-		{
-			if(index==s.size())
-				return PARSE_STATE::PARSE_INVALID_STRING;
-			char c = s[index];
-			switch (c)
-			{
-			case '"':
-				tail = true;
-				break;
-			case '\\':
-				index++;
-				switch (s[index])
-				{
-				case '\\':
-					ss << '\\';
-					break;
-				case 'n':
-					ss << '\n';
-					break;
-				case 'b':
-					ss << '\b';
-					break;
-				case 't':
-					ss << '\t';
-					break;
-				case 'f':
-					ss << '\f';
-					break;
-				case 'r':
-					ss << '\r';
-					break;
-				case '/':
-					ss << '/';
-					break;
-				case '\"':
-					ss << '"';
-					break;
-				default:
-					return PARSE_STATE::PARSE_INVALID_STRING;
-				}
-				break;
-			default:
-				if((unsigned char)(c)<0x20)
-					return PARSE_STATE::PARSE_INVALID_STRING;
-				ss << c;
-				break;
-			}
-		}
-		v.__value = ss.str();
+		auto [ret, str] = __getRawString(s, index);
+		if (ret != PARSE_STATE::PARSE_OK)
+			return ret;
+		v.__value = std::move(str);
 		v.type = JSONTYPE::STRING_TYPE;
 		return PARSE_STATE::PARSE_OK;
 	}
@@ -212,9 +223,49 @@ protected:
 		}
 		return PARSE_STATE::PARSE_INVALID_ARRAY;
 	}
-	PARSE_STATE __parseJsonObj(const std::string_view s, size_t & index, JsonValue & v)
+	PARSE_STATE __parseJsonObj(const std::string_view s, size_t & index, JsonArray& v)
 	{
-		return PARSE_OK;
+		// {   "key1"  :  |val1| , "key2" :|val2| , ....}
+		index++;
+		if (index == s.size())
+			return PARSE_STATE::PARSE_INVALID_OBJECT;
+		if (s[index] == '}')
+		{
+			// reach obj tail;
+			index++;
+			return PARSE_STATE::PARSE_OK;
+		}
+		// bbbb"key"bbbbb:bbbbb|val|
+		for (; index < s.size();)
+		{
+			__nopBlank(s, index);
+			if (index == s.size()) break;
+			if (s[index] == '}')
+			{
+				index++;
+				return PARSE_STATE::PARSE_OK;
+			}
+			auto key_ret = __getRawString(s, index);
+			if (key_ret.first != PARSE_STATE::PARSE_OK)
+				return key_ret.first;
+			__nopBlank(s, index);
+			if (index == s.size()) break;
+			if (s[index] == ':') index++;
+			__nopBlank(s, index);
+			if (index == s.size()) break;
+			JsonValue sub_value;
+			auto sub_ret = __parseValue(s, index, sub_value);
+			if (sub_ret != PARSE_STATE::PARSE_OK)
+			{
+				return sub_ret;
+			}
+			v.insert(JsonNode(std::move(key_ret.second), std::move(sub_value)));
+			__nopBlank(s, index);
+			if (index == s.size()) break;
+			if (s[index] == ',') index++;
+			__nopBlank(s, index);
+		}
+		return PARSE_STATE::PARSE_OK;
 	}
 	PARSE_STATE __parseValue(const std::string_view s, size_t & index, JsonValue & v)
 	{
@@ -234,7 +285,8 @@ protected:
 			ret = __parseArray(s, index, js_array);
 			break;
 		case '{': 
-			return __parseJsonObj(s, index, v);
+			ret = __parseJsonObj(s, index, js_array);
+			break;
 		default: return __parseNum(s, index, v);
 		}
 		if (array_type&&ret == PARSE_STATE::PARSE_OK)
@@ -242,6 +294,11 @@ protected:
 			v.__value = std::move(js_array);
 			v.array_type = true;
 			v.type = JSONTYPE::ARRAY_TYPE;
+		}
+		else
+		{
+			v.__value = std::move(js_array);
+			v.type = JSONTYPE::JSON_TYPE;
 		}
 		return ret;
 	}
@@ -264,26 +321,75 @@ public:
 	}
 };
 class Json;
+template<class> inline constexpr bool is_array_or_vector_v = false;
+template<class T, class A> inline constexpr bool is_array_or_vector_v<std::vector<T, A>> = true;
+template<class T,int n> inline constexpr bool is_array_or_vector_v<std::array<T,n>> = true;
+template<class> inline constexpr bool has_sub_array = false;
+template<class T, class A> inline constexpr bool has_sub_array<std::vector<T, A>> = is_array_or_vector_v<T>;
+
+
 class CanJson
 {
+private:
+	template<class T>
+	JsonValue __genValue(const T& t) const
+	{
+		if constexpr (is_array_or_vector_v<T>)
+		{
+			//vector or array
+			JsonArray json_array;
+			for (size_t i = 0; i < t.size(); i++)
+			{
+				if constexpr (has_sub_array<T>)
+				{
+					JsonValue v = genValue(t[i]);
+					json_array.insert(JsonNode("", v));
+				}
+				else
+				{
+					json_array.insert(JsonNode("", JsonValue(t[i])));
+				}
+			}
+			return JsonValue(std::move(json_array), true);
+		}
+		else
+		{
+			return JsonValue(T(t));
+		}
+		return JsonValue();
+	}
 public:
-	virtual Json toJson() = 0;
+	virtual Json toJson() const = 0;
+	void insertJsonArray(JsonArray & a,const String & k,const JsonValue & v)const
+	{
+		a.insert(JsonNode(k, v));
+	}
+	JsonValue genValue()const
+	{
+		return JsonValue();
+	}
+	template<class T>
+	JsonValue genValue(const T & t) const
+	{
+		JsonValue v = __genValue(t);
+		v.getType();
+		return v;
+	}
 };
-class Json
+class Json:protected Parse
 {
 public:
 	Json();
 	~Json();
 	Json(const Json & js);
+	Json(JsonArray && a);
 	Json(Json && js);
 	Json(const CanJson & cls);
 	void addNode(const JsonNode & jn);
-	void addNode(const JsonNode && jn);
-	void parse(const std::string_view s);
+	void addNode(JsonNode && jn);
 	void read(const std::string & file_path);
-	void dump();
-	const JsonNode & operator [](const std::string & s);
+	void save(const std::string & target_path);
+	const JsonNode & operator [](const std::string & s) const;
 	std::string toString()const;
-
-	std::shared_ptr<JsonArray> jsons;
+	JsonArray jsons;
 };

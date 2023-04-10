@@ -1,4 +1,5 @@
 #include"Json.h"
+
 class ParseTest:protected Parse
 {
 private:
@@ -14,7 +15,7 @@ private:
 	void __testInvalid()
 	{
 		JsonValue v;
-		auto testInvalid = [&](const std::string_view s) {eq(parseJson(s, v), PARSE_INVALID_VALUE); };
+		auto testInvalid = [&](const std::string_view s) {eq(parseJson(s, v), PARSE_STATE::PARSE_INVALID_VALUE); };
 		testInvalid("+0");
 		testInvalid("+1");
 		testInvalid(".123");
@@ -28,7 +29,7 @@ private:
 		testInvalid("fasle");
 		testInvalid("!");
 
-		auto testInvalidStr = [&](const std::string_view s) {eq(parseJson(s, v), PARSE_INVALID_STRING); };
+		auto testInvalidStr = [&](const std::string_view s) {eq(parseJson(s, v), PARSE_STATE::PARSE_INVALID_STRING); };
 		testInvalidStr("\"");
 		testInvalidStr("\"aaaa");
 		testInvalidStr("\"\\q\"");
@@ -36,7 +37,7 @@ private:
 		testInvalidStr("\"\\x12\"");
 		testInvalidStr("\"\x01\"");
 
-		auto testInvalidArr = [&](const std::string_view s) {eq(parseJson(s, v), PARSE_INVALID_ARRAY); };
+		auto testInvalidArr = [&](const std::string_view s) {eq(parseJson(s, v), PARSE_STATE::PARSE_INVALID_ARRAY); };
 		testInvalidArr("[");
 		testInvalidArr("[\"abc\",[false,]");
 		testInvalidArr("[true,false,[]    ");
@@ -46,45 +47,45 @@ private:
 	{
 		JsonValue v;
 		
-		eq(parseJson("true", v), PARSE_OK);
+		eq(parseJson("true", v), PARSE_STATE::PARSE_OK);
 		if (std::holds_alternative<bool>(v.__value))
 			eq((bool)std::get<bool>(v.__value), true);
 
-		eq(parseJson("false", v), PARSE_OK);
+		eq(parseJson("false", v), PARSE_STATE::PARSE_OK);
 		if (std::holds_alternative<bool>(v.__value))
 			eq((bool)std::get<bool>(v.__value), false);
 
-		eq(parseJson("null", v), PARSE_OK);
+		eq(parseJson("null", v), PARSE_STATE::PARSE_OK);
 		if (std::holds_alternative<Null>(v.__value))
 			eq((Null)std::get<Null>(v.__value), Null{});
 
 
-		eq(parseJson("    true   ", v), PARSE_OK);
+		eq(parseJson("    true   ", v), PARSE_STATE::PARSE_OK);
 		if(std::holds_alternative<bool>(v.__value))
 			eq((bool)std::get<bool>(v.__value),true);
 
-		eq(parseJson("   false   ", v), PARSE_OK);
+		eq(parseJson("   false   ", v), PARSE_STATE::PARSE_OK);
 		if(std::holds_alternative<bool>(v.__value))
 			eq((bool)std::get<bool>(v.__value), false);
 
-		eq(parseJson("   null   ", v), PARSE_OK);
+		eq(parseJson("   null   ", v), PARSE_STATE::PARSE_OK);
 		if (std::holds_alternative<Null>(v.__value))
 			eq((Null)std::get<Null>(v.__value), Null{});
 
 
-		eq(parseJson("", v), PARSE_NEED_VALUE);
-		eq(parseJson("     ", v), PARSE_NEED_VALUE);
+		eq(parseJson("", v), PARSE_STATE::PARSE_NEED_VALUE);
+		eq(parseJson("     ", v), PARSE_STATE::PARSE_NEED_VALUE);
 
-		eq(parseJson("false   x", v), PARSE_NEED_SINGULAR);
-		eq(parseJson("  null   x", v), PARSE_NEED_SINGULAR);
-		eq(parseJson("  true   x", v), PARSE_NEED_SINGULAR);
+		eq(parseJson("false   x", v), PARSE_STATE::PARSE_NEED_SINGULAR);
+		eq(parseJson("  null   x", v), PARSE_STATE::PARSE_NEED_SINGULAR);
+		eq(parseJson("  true   x", v), PARSE_STATE::PARSE_NEED_SINGULAR);
 	}
 
 	void __testNums()
 	{
 		JsonValue v;
 		auto nums_should_ok = [&](const double num, const std::string_view & s) {
-			eq(parseJson(s, v), PARSE_OK);
+			eq(parseJson(s, v), PARSE_STATE::PARSE_OK);
 			if (std::holds_alternative<double>(v.__value))
 			{
 				eq((double)std::get<double>(v.__value), num);
@@ -126,7 +127,7 @@ private:
 	{
 		JsonValue v;
 		auto testString = [&](const std::string_view target_str,const std::string_view s) {
-			eq(parseJson(s, v), PARSE_OK);
+			eq(parseJson(s, v), PARSE_STATE::PARSE_OK);
 			if (std::holds_alternative<String>(v.__value))
 			{
 				eq((std::string_view)(std::get<String>(v.__value)), target_str);
@@ -145,7 +146,7 @@ private:
 		JsonValue v;
 		auto testArray = [&](const std::string_view s,JsonValue & target) 
 		{
-			eq(parseJson(s, v), PARSE_OK);
+			eq(parseJson(s, v), PARSE_STATE::PARSE_OK);
 			if (std::holds_alternative<JsonArray>(v.__value))
 			{
 				eq(v.eq(target),true);
@@ -162,7 +163,6 @@ private:
 			},true);
 		target.getType();
 		testArray("[  1.00 , [\"abc\", true  ]   ]", target);
-		std::cout << v.toString() << std::endl;
 
 
 		JsonValue last = JsonValue(JsonArray{
@@ -182,7 +182,55 @@ private:
 			}, true);
 		target2.getType();
 		testArray("[  1.00 , [\"abc\", true,[2.00 , \"def\", false]  ]   ]", target2);
-		std::cout << v.toString() << std::endl;
+	}
+
+	void __testObjects()
+	{
+		JsonValue v;
+		auto testObj = [&](const std::string_view s, JsonValue& target)
+		{
+			eq(parseJson(s, v), PARSE_STATE::PARSE_OK);
+			if (std::holds_alternative<JsonArray>(v.__value))
+			{
+				eq(v.eq(target), true);
+			}
+		};
+		JsonValue n_value(std::monostate{});
+		JsonValue f_value(false);
+		JsonValue t_value(true);
+		JsonValue i_value(123.0);
+		JsonValue s_value(String("abc"));
+		JsonValue a_value(JsonArray{ 
+			JsonNode("",JsonValue(1.)),
+			JsonNode("",JsonValue(2.)),
+			JsonNode("",JsonValue(3.)) }, true);
+		JsonValue o_value(JsonArray{
+			JsonNode("1",JsonValue(1.)),
+			JsonNode("2",JsonValue(2.)),
+			JsonNode("3",JsonValue(3.))
+			}, false);
+		JsonArray nodes;
+		nodes.insert(JsonNode("n",n_value));
+		nodes.insert(JsonNode("f", f_value));
+		nodes.insert(JsonNode("t",t_value));
+		nodes.insert(JsonNode("i", i_value));
+		nodes.insert(JsonNode("s", s_value));
+		nodes.insert(JsonNode("a", a_value));
+		nodes.insert(JsonNode("o", o_value));
+		JsonValue target(std::move(nodes), false);
+		target.getType();
+		testObj(
+			" { "
+			"\"n\" : null , "
+			"\"f\" : false , "
+			"\"t\" : true , "
+			"\"i\" : 123 , "
+			"\"s\" : \"abc\", "
+			"\"a\" : [ 1, 2, 3 ],"
+			"\"o\" : { \"1\" : 1, \"2\" : 2, \"3\" : 3 }"
+			" } ",
+			target
+		);
 	}
 
 public:
@@ -193,6 +241,7 @@ public:
 		__testInvalid();
 		__testStrings();
 		__testArrays();
+		__testObjects();
 		std::cout << "passed tests:" << pass_num << std::endl;
 		std::cout << "total tests:" << test_num << std::endl;
 		if (pass_num == test_num)
@@ -200,8 +249,118 @@ public:
 	}
 };
 
+#include<array>
+class A :public CanJson
+{
+private:
+	int a = 0;
+	int b = 0;
+	long c = 0;
+	String str = "";
+	std::vector<std::vector<int>> nums;
+	std::array<long, 2> lnums{};
+	bool flag = false;
+public:
+	A()
+	{
+		a = 1; b = 2; str = "abcde"; nums = { {1,2,3},{4,5,6},{7,8,9} }; lnums = { 10000,20000 }, flag = true;
+	}
+	A(const Json& js)
+	{
+		a = js["a"];
+		b = js["b"];
+		c = js["c"];
+		str = String(js["str"]);
+		auto [num_begin, num_end] = js["nums"].iterArrayValue();
+		for (int i = 0; num_begin != num_end; i++, num_begin++)
+		{
+			auto [sub_num_begin, sub_num_end] = num_begin->iterArrayValue();
+			std::vector<int> sub;
+			for (int j = 0; sub_num_begin != sub_num_end; i++, sub_num_begin++)
+			{
+				sub.push_back(*sub_num_begin);
+			}
+			nums.push_back(std::move(sub));
+		}
+		auto [arr_begin, arr_end] = js["lnums"].iterArrayValue();
+		for (int i = 0; arr_begin != arr_end; i++, arr_begin++)
+		{
+			lnums[i] = *arr_begin;
+		}
+		flag = js["flag"];
+	}
+	Json toJson()const  override {
+		auto a_v = genValue(a);
+		auto b_v = genValue(b);
+		auto c_v = genValue(c);
+		auto str_v = genValue(str);
+		auto nums_v = genValue(nums);
+		auto lnums_v = genValue(lnums);
+		auto flag_v = genValue<bool>(flag);
+		JsonArray js;
+		insertJsonArray(js, "a", a_v);
+		insertJsonArray(js, "b", b_v);
+		insertJsonArray(js, "c", c_v);
+		insertJsonArray(js, "str", str_v);
+		insertJsonArray(js, "nums", nums_v);
+		insertJsonArray(js, "lnums", lnums_v);
+		insertJsonArray(js, "flag", flag_v);
+		return Json(std::move(js));
+	};
+
+	bool operator==(const A& b)const
+	{
+		if (a != b.a || this->b != b.b || c != b.c || str != b.str||flag!=b.flag|| lnums != b.lnums||nums!=b.nums)
+			return false;
+		return true;
+	}
+
+};
+
 int main()
 {
 	ParseTest t;
 	t.test();
+
+	A a;
+	Json a_js(a);
+	std::cout << "save json looks like:" << std::endl;
+	std::cout << a_js.toString() << std::endl;
+	a_js.save("test.json");
+
+	Json b_js;
+	b_js.read("test.json");
+	std::cout << "read json looks like:" << std::endl;
+	std::cout << b_js.toString() << std::endl;
+	A b(b_js);
+	
+
+	std::cout << "start cmp json a and json b" << std::endl;
+	auto a_it = a_js.jsons.begin();
+	auto b_it = b_js.jsons.begin();
+	bool eq = true;
+	while (a_it != a_js.jsons.end())
+	{
+
+		if (!a_it->valueEq(*b_it))
+		{
+			eq = false;
+			break;
+		}
+		a_it++;
+		b_it++;
+	}
+	if (eq)
+	{
+		std::cout << "cmp reuslt :json a == json b" << std::endl;
+	}
+	else
+	{
+		std::cout << "cmp reuslt :json a != json b" << std::endl;
+	}
+	std::cout << "start cmp class a and class b" << std::endl;
+	if (a == b)
+		std::cout << "cmp result : a == b" << std::endl;
+	else
+		std::cout << "cmp reuslt : a!=b" << std::endl;
 }
