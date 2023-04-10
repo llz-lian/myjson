@@ -32,7 +32,7 @@ const JsonNode & JsonNode::operator [](const std::string & s)
 		throw std::runtime_error("worng [] key is: " + s);
 	return (*find_ret);// a jsonvalue not a node
 }
-std::string & JsonNode::getKey()
+const std::string & JsonNode::getKey() const
 {
 	return __key;
 }

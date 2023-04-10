@@ -14,7 +14,7 @@ public:
 	bool operator<(const JsonNode & b)const;
 	bool valueEq(const JsonNode & b)const;
 	const JsonNode & operator [](const std::string & s);
-	std::string & getKey();
+	const std::string & getKey() const;
 	JSONTYPE valueType() 
 	{
 		return __value.getType();
@@ -39,14 +39,12 @@ public:
 			throw std::runtime_error("value wrong convert.");
 		return String(__value);
 	}
-
 	auto iterArrayValue()const
 	{
 		if (!(__value.getType() == JSONTYPE::JSON_TYPE || __value.getType() == JSONTYPE::ARRAY_TYPE))
 			throw std::runtime_error("not a array");
 		return std::pair{ std::get<JsonArray>(__value.__value).begin(),std::get<JsonArray>(__value.__value).end()};
 	}
-
 private:
 	std::string __key;
 	JsonValue __value;

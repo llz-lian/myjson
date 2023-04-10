@@ -36,7 +36,7 @@ struct JsonValue
 	}
 
 	template<class T, 
-		class U = typename std::enable_if<std::is_integral_v<T>, T>::type>
+		class U = typename std::enable_if<std::is_integral_v<T>, void>::type>
 	operator T() const
 	{
 		if (!canGetValue())
@@ -51,10 +51,13 @@ struct JsonValue
 			throw std::runtime_error("value wrong convert.");
 		return std::get<String>(__value);
 	}
+
 	bool canGetValue()const
 	{
 		return !(type == JSONTYPE::NO_TYPE || type == JSONTYPE::ARRAY_TYPE || type == JSONTYPE::JSON_TYPE);
 	}
+
+
 	Value __value = std::monostate{};
 	bool array_type = false;
 	JSONTYPE type = JSONTYPE::NO_TYPE;

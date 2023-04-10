@@ -1,8 +1,7 @@
 #pragma once
 #include<sstream>
-#ifdef DEUBG
-#include<cassert>
-#endif
+#include<map>
+#include<unordered_map>
 #include"Node.h"
 #include"Func.h"
 enum class PARSE_STATE { PARSE_INVALID_VALUE, PARSE_OK, PARSE_NEED_VALUE, 
@@ -321,12 +320,17 @@ public:
 	}
 };
 class Json;
+
 template<class> inline constexpr bool is_array_or_vector_v = false;
 template<class T, class A> inline constexpr bool is_array_or_vector_v<std::vector<T, A>> = true;
-template<class T,int n> inline constexpr bool is_array_or_vector_v<std::array<T,n>> = true;
+template<class T,size_t n> inline constexpr bool is_array_or_vector_v<std::array<T,n>> = true;
 template<class> inline constexpr bool has_sub_array = false;
 template<class T, class A> inline constexpr bool has_sub_array<std::vector<T, A>> = is_array_or_vector_v<T>;
+template<class T, size_t n> inline constexpr bool has_sub_array<std::array<T, n>> = is_array_or_vector_v<T>;
 
+
+template<class> inline constexpr bool is_string = false;
+template<class C,class A> inline constexpr bool is_string<std::basic_string<C,A>> = true;
 
 class CanJson
 {
@@ -357,6 +361,38 @@ private:
 			return JsonValue(T(t));
 		}
 		return JsonValue();
+	}
+	template<class K,class V>
+	JsonValue __genValue(const std::map<K,V> & map) const
+	{
+		JsonArray json_array;
+		for (const auto &[k,value]:map)
+		{
+			String key;
+			if constexpr (!is_string<K>)
+				key = std::to_string(k);
+			else
+				key = k;
+			JsonValue v = genValue(value);
+			json_array.insert(JsonNode(key, v));
+		}
+		return JsonValue(std::move(json_array), false);
+	}
+	template<class K, class V>
+	JsonValue __genValue(const std::unordered_map<K, V>& map) const
+	{
+		JsonArray json_array;
+		for (const auto& [k, value] : map)
+		{
+			String key;
+			if constexpr (!is_string<K>)
+				key = std::to_string(k);
+			else
+				key = k;
+			JsonValue v = genValue(value);
+			json_array.insert(JsonNode(key, v));
+		}
+		return JsonValue(std::move(json_array), false);
 	}
 public:
 	virtual Json toJson() const = 0;
@@ -390,6 +426,7 @@ public:
 	void read(const std::string & file_path);
 	void save(const std::string & target_path);
 	const JsonNode & operator [](const std::string & s) const;
+
 	std::string toString()const;
 	JsonArray jsons;
 };

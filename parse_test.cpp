@@ -1,3 +1,5 @@
+#include<unordered_map>
+#include<map>
 #include"Json.h"
 
 class ParseTest:protected Parse
@@ -260,10 +262,27 @@ private:
 	std::vector<std::vector<int>> nums;
 	std::array<long, 2> lnums{};
 	bool flag = false;
+	std::unordered_map<String, int> a_umap;
+	std::map<int, String> a_map;
+	std::unordered_map<String, std::vector<int>> s_vec_map;
+	template<class T>
+	std::vector<T> getVec(const JsonNode & n)
+	{
+		auto [sub_num_begin, sub_num_end] = n.iterArrayValue();
+		std::vector<T> sub;
+		for (; sub_num_begin != sub_num_end; sub_num_begin++)
+		{
+			sub.push_back(*sub_num_begin);
+		}
+		return sub;
+	}
 public:
 	A()
 	{
 		a = 1; b = 2; str = "abcde"; nums = { {1,2,3},{4,5,6},{7,8,9} }; lnums = { 10000,20000 }, flag = true;
+		a_umap = { {"a",1},{"b",2} };
+		a_map = { {1,"s1"},{2,"s2"} };
+		s_vec_map = { {"vec1",{1,2,3,4}},{"vec2",{4,5,}} };
 	}
 	A(const Json& js)
 	{
@@ -274,13 +293,7 @@ public:
 		auto [num_begin, num_end] = js["nums"].iterArrayValue();
 		for (int i = 0; num_begin != num_end; i++, num_begin++)
 		{
-			auto [sub_num_begin, sub_num_end] = num_begin->iterArrayValue();
-			std::vector<int> sub;
-			for (int j = 0; sub_num_begin != sub_num_end; i++, sub_num_begin++)
-			{
-				sub.push_back(*sub_num_begin);
-			}
-			nums.push_back(std::move(sub));
+			nums.push_back(getVec<int>(*num_begin));
 		}
 		auto [arr_begin, arr_end] = js["lnums"].iterArrayValue();
 		for (int i = 0; arr_begin != arr_end; i++, arr_begin++)
@@ -288,6 +301,21 @@ public:
 			lnums[i] = *arr_begin;
 		}
 		flag = js["flag"];
+		auto [a_umap_begin, a_umap_end] = js["a_umap"].iterArrayValue();
+		for (; a_umap_begin != a_umap_end; a_umap_begin++)
+		{
+			a_umap[a_umap_begin->getKey()] = *a_umap_begin;
+		}
+		auto [a_map_begin, a_map_end] = js["a_map"].iterArrayValue();
+		for (; a_map_begin != a_map_end; a_map_begin++)
+		{
+			a_map[std::stoi(a_map_begin->getKey())] = String(*a_map_begin);
+		}
+		auto [vec_map_begin, vec_map_end] = js["s_vec_map"].iterArrayValue();
+		for (; vec_map_begin != vec_map_end; vec_map_begin++)
+		{
+			s_vec_map[vec_map_begin->getKey()] = getVec<int>(*vec_map_begin);
+		}
 	}
 	Json toJson()const  override {
 		auto a_v = genValue(a);
@@ -296,7 +324,11 @@ public:
 		auto str_v = genValue(str);
 		auto nums_v = genValue(nums);
 		auto lnums_v = genValue(lnums);
-		auto flag_v = genValue<bool>(flag);
+		auto flag_v = genValue(flag);
+		auto a_umap_v = genValue(a_umap);
+		auto a_map_v = genValue(a_map);
+		auto s_vec_map_v = genValue(s_vec_map);
+
 		JsonArray js;
 		insertJsonArray(js, "a", a_v);
 		insertJsonArray(js, "b", b_v);
@@ -305,16 +337,21 @@ public:
 		insertJsonArray(js, "nums", nums_v);
 		insertJsonArray(js, "lnums", lnums_v);
 		insertJsonArray(js, "flag", flag_v);
+		insertJsonArray(js, "a_umap", a_umap_v);
+		insertJsonArray(js, "a_map", a_map_v);
+		insertJsonArray(js, "s_vec_map", s_vec_map_v);
+
 		return Json(std::move(js));
 	};
 
 	bool operator==(const A& b)const
 	{
-		if (a != b.a || this->b != b.b || c != b.c || str != b.str||flag!=b.flag|| lnums != b.lnums||nums!=b.nums)
+		if (a != b.a || this->b != b.b || c != b.c || 
+			str != b.str||flag!=b.flag|| lnums != b.lnums
+			||nums!=b.nums||a_map!=b.a_map||a_umap!=b.a_umap)
 			return false;
 		return true;
 	}
-
 };
 
 int main()
